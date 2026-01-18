@@ -22,11 +22,10 @@ async function run() {
         await client.connect();
         const database = client.db('coffee-store') // create database
         const coffeeCollection = database.collection('coffees') // create coffees collection
-
+        const orderCollection = database.collection('orders') /// crete order collection
         // get coffee data 
         app.get('/coffees', async (req, res) => {
             const allCoffees = await coffeeCollection.find().toArray();
-            console.log(allCoffees);
             res.send(allCoffees)
         })
 
@@ -86,6 +85,57 @@ async function run() {
 
             res.send(result)
         })
+
+        // handle like toggle and count: 
+        app.patch('/like/:coffeeId', async (req, res) => {
+            const id = req.params.coffeeId;
+            const email = req.body.email;
+
+            const filter = { _id: new ObjectId(id) }
+
+            const coffee = await coffeeCollection.findOne(filter)
+
+            const alreadyLiked = coffee?.likedBy?.includes(email);
+
+            const updateDoc = alreadyLiked ? {
+                $pull: {
+                    likedBy: email,
+                }
+            } :
+                {
+                    $addToSet: {
+                        likedBy: email,
+                    }
+
+                }
+
+            await coffeeCollection.updateOne(filter, updateDoc)
+            res.send({
+                message: alreadyLiked ? " dislike successfully done" : "liked successful",
+                liked: !alreadyLiked
+            })
+        })
+
+        //handle order section: 
+        //save a coffee data in database through post request
+        app.post('/place-order/:coffeeId', async (req, res) => {
+            const id = req.params.coffeeId;
+            const orderData = req.body;
+            const query = { _id: new ObjectId(id) }
+            const result = await orderCollection.insertOne(orderData)
+
+            if (result.acknowledged) {
+                await coffeeCollection.updateOne(
+                    query, {
+                    $inc: {
+                        quantity: -1,
+                    },
+                }
+                )
+            }
+            res.status(201).send(result)
+        })
+
 
 
         await client.db("admin").command({ ping: 1 });
