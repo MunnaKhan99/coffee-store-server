@@ -75,7 +75,7 @@ async function run() {
             res.send(result)
         })
 
-        // delete a single item 
+        // delete a single coffee item 
         app.delete('/coffee/:id', async (req, res) => {
             const id = req.params.id;
             //need some validation
@@ -135,6 +135,43 @@ async function run() {
             }
             res.status(201).send(result)
         })
+
+        //get all order by customer email: 
+        app.get('/my-orders/:email', async (req, res) => {
+            const email = req.params.email;
+            const filter = { customerEmail: email }
+            const allOrders = await orderCollection.find(filter).toArray();
+
+            for (const order of allOrders) {
+                const orderId = order.coffeeId
+                const fullCoffeeData = await coffeeCollection.findOne({ _id: new ObjectId(orderId), })
+                order.name = fullCoffeeData.name
+                order.photo = fullCoffeeData.photo
+                order.price = fullCoffeeData.price
+                order.quantity = fullCoffeeData.quantity
+
+            }
+            res.send(allOrders)
+        })
+
+        // cancel a single coffee item 
+        app.delete('/my-orders/:id', async (req, res) => {
+            const id = req.params.id;
+            const query = { _id: new ObjectId(id) };
+
+            const order = await orderCollection.findOne(query);
+            if (!order) return res.status(404).send({ message: "Order not found" });
+
+            const deleteResult = await orderCollection.deleteOne(query);
+
+            if (deleteResult.deletedCount > 0) {
+                await coffeeCollection.updateOne(
+                    { _id: new ObjectId(order.coffeeId) },
+                    { $inc: { quantity: 1 } }
+                );
+                res.send(deleteResult);
+            }
+        });
 
 
 
